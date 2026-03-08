@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <random>
+#include <string>
 #include <vector>
 
 #include <cuda_runtime.h>
@@ -16,6 +17,45 @@
 			exit(1);                                                       \
 		}                                                                      \
 	} while (0)
+
+struct Args {
+	std::string kernel = "naive";
+	long n = 0;
+	int iters = 20;
+	int warmup = 3;
+	bool check = true;
+};
+
+inline Args parse(int argc, char **argv, long default_n)
+{
+	Args a;
+	a.n = default_n;
+	for (int i = 1; i < argc; i++) {
+		std::string s = argv[i];
+		auto val = [&]() {
+			if (i + 1 >= argc) {
+				fprintf(stderr, "%s needs a value\n", s.c_str());
+				exit(1);
+			}
+			return std::string(argv[++i]);
+		};
+		if (s == "--kernel")
+			a.kernel = val();
+		else if (s == "--n")
+			a.n = std::stol(val());
+		else if (s == "--iters")
+			a.iters = std::stoi(val());
+		else if (s == "--warmup")
+			a.warmup = std::stoi(val());
+		else if (s == "--no-check")
+			a.check = false;
+		else {
+			fprintf(stderr, "unknown arg %s\n", s.c_str());
+			exit(1);
+		}
+	}
+	return a;
+}
 
 struct GpuTimer {
 	cudaEvent_t a, b;
@@ -58,4 +98,24 @@ inline bool close_enough(const std::vector<float> &got, const std::vector<float>
 		}
 	}
 	return true;
+}
+
+template <class F>
+float time_ms(const Args &a, F f)
+{
+	for (int i = 0; i < a.warmup; i++)
+		f();
+	CK(cudaDeviceSynchronize());
+	GpuTimer t;
+	t.start();
+	for (int i = 0; i < a.iters; i++)
+		f();
+	float ms = t.stop();
+	CK(cudaGetLastError());
+	return ms / a.iters;
+}
+
+inline void report(const Args &a, float ms, const char *rate_name, double rate, bool ok)
+{
+	printf("kernel=%s n=%ld time_ms=%.4f %s=%.2f ok=%d\n", a.kernel.c_str(), a.n, ms, rate_name, rate, ok ? 1 : 0);
 }

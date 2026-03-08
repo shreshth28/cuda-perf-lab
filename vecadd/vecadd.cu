@@ -7,6 +7,13 @@ __global__ void add_naive(const float *a, const float *b, float *c, long n)
 		c[i] = a[i] + b[i];
 }
 
+__global__ void add_stride(const float *a, const float *b, float *c, long n)
+{
+	long stride = (long)gridDim.x * blockDim.x;
+	for (long i = blockIdx.x * (long)blockDim.x + threadIdx.x; i < n; i += stride)
+		c[i] = a[i] + b[i];
+}
+
 int main(int argc, char **argv)
 {
 	Args args = parse(argc, argv, 1L << 24);
@@ -26,9 +33,14 @@ int main(int argc, char **argv)
 	int bs = 256;
 	int grid = (n + bs - 1) / bs;
 
+	int sms;
+	CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
+
 	float ms;
 	if (args.kernel == "naive") {
 		ms = time_ms(args, [&] { add_naive<<<grid, bs>>>(a, b, c, n); });
+	} else if (args.kernel == "stride") {
+		ms = time_ms(args, [&] { add_stride<<<sms * 8, bs>>>(a, b, c, n); });
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include <cublas_v2.h>
 #include <cuda_runtime.h>
 
 #define CK(x)                                                                          \
@@ -14,6 +15,15 @@
 		cudaError_t e_ = (x);                                                  \
 		if (e_ != cudaSuccess) {                                               \
 			fprintf(stderr, "%s:%d %s\n", __FILE__, __LINE__, cudaGetErrorString(e_)); \
+			exit(1);                                                       \
+		}                                                                      \
+	} while (0)
+
+#define CKB(x)                                                                         \
+	do {                                                                           \
+		cublasStatus_t s_ = (x);                                               \
+		if (s_ != CUBLAS_STATUS_SUCCESS) {                                     \
+			fprintf(stderr, "%s:%d cublas error %d\n", __FILE__, __LINE__, (int)s_); \
 			exit(1);                                                       \
 		}                                                                      \
 	} while (0)

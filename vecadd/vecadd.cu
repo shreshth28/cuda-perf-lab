@@ -61,6 +61,16 @@ int main(int argc, char **argv)
 		ms = time_ms(args, [&] {
 			add_vec4<<<g4, bs>>>((const float4 *)a, (const float4 *)b, (float4 *)c, n4, a, b, c, n);
 		});
+	} else if (args.kernel == "cublas") {
+		cublasHandle_t h;
+		CKB(cublasCreate(&h));
+		float one = 1.f;
+		CK(cudaMemcpy(c, b, n * sizeof(float), cudaMemcpyDeviceToDevice));
+		ms = time_ms(args, [&] { CKB(cublasSaxpy(h, n, &one, a, 1, c, 1)); });
+		CK(cudaMemcpy(c, b, n * sizeof(float), cudaMemcpyDeviceToDevice));
+		CKB(cublasSaxpy(h, n, &one, a, 1, c, 1));
+		CK(cudaDeviceSynchronize());
+		cublasDestroy(h);
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

@@ -7,6 +7,22 @@ __global__ void sum_atomic(const float *x, float *out, long n)
 		atomicAdd(out, x[i]);
 }
 
+template <int BS>
+__global__ void sum_tree(const float *x, float *out, long n)
+{
+	__shared__ float s[BS];
+	long i = blockIdx.x * (long)BS + threadIdx.x;
+	s[threadIdx.x] = x[i];
+	__syncthreads();
+	for (int k = BS / 2; k > 0; k >>= 1) {
+		if (threadIdx.x < k)
+			s[threadIdx.x] += s[threadIdx.x + k];
+		__syncthreads();
+	}
+	if (threadIdx.x == 0)
+		atomicAdd(out, s[0]);
+}
+
 int main(int argc, char **argv)
 {
 	Args args = parse(argc, argv, 1L << 24);
@@ -28,6 +44,11 @@ int main(int argc, char **argv)
 		ms = time_ms(args, [&] {
 			CK(cudaMemsetAsync(out, 0, sizeof(float)));
 			sum_atomic<<<grid, bs>>>(x, out, n);
+		});
+	} else if (args.kernel == "tree") {
+		ms = time_ms(args, [&] {
+			CK(cudaMemsetAsync(out, 0, sizeof(float)));
+			sum_tree<256><<<grid, 256>>>(x, out, n);
 		});
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());

@@ -23,6 +23,31 @@ __global__ void sum_tree(const float *x, float *out, long n)
 		atomicAdd(out, s[0]);
 }
 
+__device__ float warp_sum(float v)
+{
+	for (int o = 16; o > 0; o >>= 1)
+		v += __shfl_down_sync(0xffffffff, v, o);
+	return v;
+}
+
+__global__ void sum_shfl(const float *x, float *out, long n)
+{
+	__shared__ float w[32];
+	long i = blockIdx.x * (long)blockDim.x + threadIdx.x;
+	float v = i < n ? x[i] : 0.f;
+	v = warp_sum(v);
+	int lane = threadIdx.x & 31, wid = threadIdx.x >> 5;
+	if (lane == 0)
+		w[wid] = v;
+	__syncthreads();
+	if (wid == 0) {
+		v = lane < blockDim.x / 32 ? w[lane] : 0.f;
+		v = warp_sum(v);
+		if (lane == 0)
+			atomicAdd(out, v);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	Args args = parse(argc, argv, 1L << 24);
@@ -49,6 +74,11 @@ int main(int argc, char **argv)
 		ms = time_ms(args, [&] {
 			CK(cudaMemsetAsync(out, 0, sizeof(float)));
 			sum_tree<256><<<grid, 256>>>(x, out, n);
+		});
+	} else if (args.kernel == "shfl") {
+		ms = time_ms(args, [&] {
+			CK(cudaMemsetAsync(out, 0, sizeof(float)));
+			sum_shfl<<<grid, bs>>>(x, out, n);
 		});
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());

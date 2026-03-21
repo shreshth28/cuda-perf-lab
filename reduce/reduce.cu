@@ -30,11 +30,9 @@ __device__ float warp_sum(float v)
 	return v;
 }
 
-__global__ void sum_shfl(const float *x, float *out, long n)
+__device__ void block_sum_to(float v, float *out)
 {
 	__shared__ float w[32];
-	long i = blockIdx.x * (long)blockDim.x + threadIdx.x;
-	float v = i < n ? x[i] : 0.f;
 	v = warp_sum(v);
 	int lane = threadIdx.x & 31, wid = threadIdx.x >> 5;
 	if (lane == 0)
@@ -46,6 +44,21 @@ __global__ void sum_shfl(const float *x, float *out, long n)
 		if (lane == 0)
 			atomicAdd(out, v);
 	}
+}
+
+__global__ void sum_shfl(const float *x, float *out, long n)
+{
+	long i = blockIdx.x * (long)blockDim.x + threadIdx.x;
+	block_sum_to(i < n ? x[i] : 0.f, out);
+}
+
+__global__ void sum_multi(const float *x, float *out, long n)
+{
+	long stride = (long)gridDim.x * blockDim.x;
+	float v = 0.f;
+	for (long i = blockIdx.x * (long)blockDim.x + threadIdx.x; i < n; i += stride)
+		v += x[i];
+	block_sum_to(v, out);
 }
 
 int main(int argc, char **argv)
@@ -64,6 +77,9 @@ int main(int argc, char **argv)
 	int bs = 256;
 	int grid = (n + bs - 1) / bs;
 
+	int sms;
+	CK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, 0));
+
 	float ms;
 	if (args.kernel == "atomic") {
 		ms = time_ms(args, [&] {
@@ -79,6 +95,11 @@ int main(int argc, char **argv)
 		ms = time_ms(args, [&] {
 			CK(cudaMemsetAsync(out, 0, sizeof(float)));
 			sum_shfl<<<grid, bs>>>(x, out, n);
+		});
+	} else if (args.kernel == "multi") {
+		ms = time_ms(args, [&] {
+			CK(cudaMemsetAsync(out, 0, sizeof(float)));
+			sum_multi<<<sms * 8, bs>>>(x, out, n);
 		});
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());

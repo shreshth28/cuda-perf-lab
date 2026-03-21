@@ -101,6 +101,13 @@ int main(int argc, char **argv)
 			CK(cudaMemsetAsync(out, 0, sizeof(float)));
 			sum_multi<<<sms * 8, bs>>>(x, out, n);
 		});
+	} else if (args.kernel == "cublas") {
+		cublasHandle_t h;
+		CKB(cublasCreate(&h));
+		CKB(cublasSetPointerMode(h, CUBLAS_POINTER_MODE_DEVICE));
+		ms = time_ms(args, [&] { CKB(cublasSasum(h, n, x, 1, out)); });
+		CK(cudaDeviceSynchronize());
+		cublasDestroy(h);
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

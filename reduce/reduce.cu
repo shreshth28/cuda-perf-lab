@@ -12,7 +12,7 @@ __global__ void sum_tree(const float *x, float *out, long n)
 {
 	__shared__ float s[BS];
 	long i = blockIdx.x * (long)BS + threadIdx.x;
-	s[threadIdx.x] = x[i];
+	s[threadIdx.x] = i < n ? x[i] : 0.f;
 	__syncthreads();
 	for (int k = BS / 2; k > 0; k >>= 1) {
 		if (threadIdx.x < k)

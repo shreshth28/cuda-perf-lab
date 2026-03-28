@@ -8,6 +8,22 @@ __global__ void tr_naive(const float *in, float *out, int n)
 		out[(long)x * n + y] = in[(long)y * n + x];
 }
 
+__global__ void tr_tiled(const float *in, float *out, int n)
+{
+	__shared__ float t[32][32];
+	int x = blockIdx.x * 32 + threadIdx.x;
+	int y = blockIdx.y * 32 + threadIdx.y;
+	for (int j = 0; j < 32; j += 8)
+		if (x < n && y + j < n)
+			t[threadIdx.y + j][threadIdx.x] = in[(long)(y + j) * n + x];
+	__syncthreads();
+	x = blockIdx.y * 32 + threadIdx.x;
+	y = blockIdx.x * 32 + threadIdx.y;
+	for (int j = 0; j < 32; j += 8)
+		if (x < n && y + j < n)
+			out[(long)(y + j) * n + x] = t[threadIdx.x][threadIdx.y + j];
+}
+
 int main(int argc, char **argv)
 {
 	Args args = parse(argc, argv, 4096);
@@ -24,10 +40,13 @@ int main(int argc, char **argv)
 
 	dim3 b(32, 8);
 	dim3 g((n + 31) / 32, (n + 7) / 8);
+	dim3 gt((n + 31) / 32, (n + 31) / 32);
 
 	float ms;
 	if (args.kernel == "naive") {
 		ms = time_ms(args, [&] { tr_naive<<<g, b>>>(in, out, n); });
+	} else if (args.kernel == "tiled") {
+		ms = time_ms(args, [&] { tr_tiled<<<gt, b>>>(in, out, n); });
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

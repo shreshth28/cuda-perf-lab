@@ -50,6 +50,15 @@ int main(int argc, char **argv)
 		ms = time_ms(args, [&] { tr_tiled<0><<<gt, b>>>(in, out, n); });
 	} else if (args.kernel == "tiled_pad") {
 		ms = time_ms(args, [&] { tr_tiled<1><<<gt, b>>>(in, out, n); });
+	} else if (args.kernel == "cublas") {
+		cublasHandle_t h;
+		CKB(cublasCreate(&h));
+		float one = 1.f, zero = 0.f;
+		ms = time_ms(args, [&] {
+			CKB(cublasSgeam(h, CUBLAS_OP_T, CUBLAS_OP_N, n, n, &one, in, n, &zero, out, n, out, n));
+		});
+		CK(cudaDeviceSynchronize());
+		cublasDestroy(h);
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

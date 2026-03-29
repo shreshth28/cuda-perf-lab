@@ -8,9 +8,10 @@ __global__ void tr_naive(const float *in, float *out, int n)
 		out[(long)x * n + y] = in[(long)y * n + x];
 }
 
+template <int PAD>
 __global__ void tr_tiled(const float *in, float *out, int n)
 {
-	__shared__ float t[32][32];
+	__shared__ float t[32][32 + PAD];
 	int x = blockIdx.x * 32 + threadIdx.x;
 	int y = blockIdx.y * 32 + threadIdx.y;
 	for (int j = 0; j < 32; j += 8)
@@ -46,7 +47,9 @@ int main(int argc, char **argv)
 	if (args.kernel == "naive") {
 		ms = time_ms(args, [&] { tr_naive<<<g, b>>>(in, out, n); });
 	} else if (args.kernel == "tiled") {
-		ms = time_ms(args, [&] { tr_tiled<<<gt, b>>>(in, out, n); });
+		ms = time_ms(args, [&] { tr_tiled<0><<<gt, b>>>(in, out, n); });
+	} else if (args.kernel == "tiled_pad") {
+		ms = time_ms(args, [&] { tr_tiled<1><<<gt, b>>>(in, out, n); });
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

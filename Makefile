@@ -10,13 +10,13 @@ all: $(PROGS)
 bin:
 	mkdir -p bin
 
-bin/vecadd: vecadd/vecadd.cu common/common.h | bin
+bin/vecadd: vecadd/vecadd.cu common/common.h common/args.h | bin
 	$(NVCC) $(NVFLAGS) -o $@ $< $(LIBS)
 
-bin/reduce: reduce/reduce.cu common/common.h | bin
+bin/reduce: reduce/reduce.cu common/common.h common/args.h | bin
 	$(NVCC) $(NVFLAGS) -o $@ $< $(LIBS)
 
-bin/transpose: transpose/transpose.cu common/common.h | bin
+bin/transpose: transpose/transpose.cu common/common.h common/args.h | bin
 	$(NVCC) $(NVFLAGS) -o $@ $< $(LIBS)
 
 clean:

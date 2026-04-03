@@ -25,6 +25,22 @@ static void mm_ikj(const float *a, const float *b, float *c, int n)
 		}
 }
 
+static void mm_omp(const float *a, const float *b, float *c, int n)
+{
+#pragma omp parallel for schedule(static)
+	for (int i = 0; i < n; i++) {
+		float *ci = c + (long)i * n;
+		for (int j = 0; j < n; j++)
+			ci[j] = 0.f;
+		for (int k = 0; k < n; k++) {
+			float aik = a[(long)i * n + k];
+			const float *bk = b + (long)k * n;
+			for (int j = 0; j < n; j++)
+				ci[j] += aik * bk[j];
+		}
+	}
+}
+
 static void mm_ref(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c, int n)
 {
 	std::vector<double> acc(n);
@@ -55,6 +71,8 @@ int main(int argc, char **argv)
 		f = mm_naive;
 	else if (args.kernel == "ikj")
 		f = mm_ikj;
+	else if (args.kernel == "omp")
+		f = mm_omp;
 	else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

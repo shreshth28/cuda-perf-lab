@@ -14,6 +14,25 @@ __global__ void mm_naive(const float *a, const float *b, float *c, int n)
 	}
 }
 
+template <int T>
+__global__ void mm_tiled(const float *a, const float *b, float *c, int n)
+{
+	__shared__ float as[T][T], bs[T][T];
+	int ty = threadIdx.y, tx = threadIdx.x;
+	int row = blockIdx.y * T + ty, col = blockIdx.x * T + tx;
+	float s = 0.f;
+	for (int t = 0; t < n; t += T) {
+		as[ty][tx] = row < n && t + tx < n ? a[row * n + t + tx] : 0.f;
+		bs[ty][tx] = t + ty < n && col < n ? b[(t + ty) * n + col] : 0.f;
+		__syncthreads();
+		for (int k = 0; k < T; k++)
+			s += as[ty][k] * bs[k][tx];
+		__syncthreads();
+	}
+	if (row < n && col < n)
+		c[row * n + col] = s;
+}
+
 static void cpu_ref(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c, int n)
 {
 	std::vector<double> acc(n);
@@ -51,6 +70,10 @@ int main(int argc, char **argv)
 		dim3 bl(32, 32);
 		dim3 g((n + 31) / 32, (n + 31) / 32);
 		ms = time_ms(args, [&] { mm_naive<<<g, bl>>>(a, b, c, n); });
+	} else if (args.kernel == "tiled") {
+		dim3 bl(32, 32);
+		dim3 g((n + 31) / 32, (n + 31) / 32);
+		ms = time_ms(args, [&] { mm_tiled<32><<<g, bl>>>(a, b, c, n); });
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

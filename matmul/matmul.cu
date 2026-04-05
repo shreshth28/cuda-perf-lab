@@ -62,6 +62,14 @@ __global__ void mm_reg1d(const float *a, const float *b, float *c, int n)
 		c[(tr * TM + m) * n + tc] = acc[m];
 }
 
+static void need_multiple(int n, int m)
+{
+	if (n % m) {
+		fprintf(stderr, "this kernel needs n to be a multiple of %d\n", m);
+		exit(1);
+	}
+}
+
 static void cpu_ref(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c, int n)
 {
 	std::vector<double> acc(n);
@@ -104,6 +112,7 @@ int main(int argc, char **argv)
 		dim3 g((n + 31) / 32, (n + 31) / 32);
 		ms = time_ms(args, [&] { mm_tiled<32><<<g, bl>>>(a, b, c, n); });
 	} else if (args.kernel == "reg1d") {
+		need_multiple(n, 64);
 		dim3 g(n / 64, n / 64);
 		ms = time_ms(args, [&] { mm_reg1d<64, 64, 8, 8><<<g, 64 * 64 / 8>>>(a, b, c, n); });
 	} else {

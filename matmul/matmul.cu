@@ -33,6 +33,35 @@ __global__ void mm_tiled(const float *a, const float *b, float *c, int n)
 		c[row * n + col] = s;
 }
 
+template <int BM, int BN, int BK, int TM>
+__global__ void mm_reg1d(const float *a, const float *b, float *c, int n)
+{
+	__shared__ float as[BM * BK], bs[BK * BN];
+	int tc = threadIdx.x % BN;
+	int tr = threadIdx.x / BN;
+	a += blockIdx.y * BM * n;
+	b += blockIdx.x * BN;
+	c += blockIdx.y * BM * n + blockIdx.x * BN;
+	int ar = threadIdx.x / BK, ac = threadIdx.x % BK;
+	int br = threadIdx.x / BN, bc = threadIdx.x % BN;
+	float acc[TM] = {0.f};
+	for (int t = 0; t < n; t += BK) {
+		as[ar * BK + ac] = a[ar * n + ac];
+		bs[br * BN + bc] = b[br * n + bc];
+		__syncthreads();
+		a += BK;
+		b += BK * n;
+		for (int k = 0; k < BK; k++) {
+			float bv = bs[k * BN + tc];
+			for (int m = 0; m < TM; m++)
+				acc[m] += as[(tr * TM + m) * BK + k] * bv;
+		}
+		__syncthreads();
+	}
+	for (int m = 0; m < TM; m++)
+		c[(tr * TM + m) * n + tc] = acc[m];
+}
+
 static void cpu_ref(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c, int n)
 {
 	std::vector<double> acc(n);
@@ -74,6 +103,9 @@ int main(int argc, char **argv)
 		dim3 bl(32, 32);
 		dim3 g((n + 31) / 32, (n + 31) / 32);
 		ms = time_ms(args, [&] { mm_tiled<32><<<g, bl>>>(a, b, c, n); });
+	} else if (args.kernel == "reg1d") {
+		dim3 g(n / 64, n / 64);
+		ms = time_ms(args, [&] { mm_reg1d<64, 64, 8, 8><<<g, 64 * 64 / 8>>>(a, b, c, n); });
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

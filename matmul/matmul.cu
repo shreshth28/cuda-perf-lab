@@ -62,6 +62,44 @@ __global__ void mm_reg1d(const float *a, const float *b, float *c, int n)
 		c[(tr * TM + m) * n + tc] = acc[m];
 }
 
+template <int BM, int BN, int BK, int TM, int TN>
+__global__ void __launch_bounds__((BM / TM) * (BN / TN)) mm_reg2d(const float *a, const float *b, float *c, int n)
+{
+	__shared__ float as[BM * BK], bs[BK * BN];
+	const int nt = (BM / TM) * (BN / TN);
+	int tc = threadIdx.x % (BN / TN);
+	int tr = threadIdx.x / (BN / TN);
+	a += blockIdx.y * BM * n;
+	b += blockIdx.x * BN;
+	c += blockIdx.y * BM * n + blockIdx.x * BN;
+	int ar = threadIdx.x / BK, ac = threadIdx.x % BK, sa = nt / BK;
+	int br = threadIdx.x / BN, bc = threadIdx.x % BN, sb = nt / BN;
+	float acc[TM * TN] = {0.f};
+	float ra[TM], rb[TN];
+	for (int t = 0; t < n; t += BK) {
+		for (int o = 0; o < BM; o += sa)
+			as[(ar + o) * BK + ac] = a[(ar + o) * n + ac];
+		for (int o = 0; o < BK; o += sb)
+			bs[(br + o) * BN + bc] = b[(br + o) * n + bc];
+		__syncthreads();
+		a += BK;
+		b += BK * n;
+		for (int k = 0; k < BK; k++) {
+			for (int m = 0; m < TM; m++)
+				ra[m] = as[(tr * TM + m) * BK + k];
+			for (int j = 0; j < TN; j++)
+				rb[j] = bs[k * BN + tc * TN + j];
+			for (int m = 0; m < TM; m++)
+				for (int j = 0; j < TN; j++)
+					acc[m * TN + j] += ra[m] * rb[j];
+		}
+		__syncthreads();
+	}
+	for (int m = 0; m < TM; m++)
+		for (int j = 0; j < TN; j++)
+			c[(tr * TM + m) * n + tc * TN + j] = acc[m * TN + j];
+}
+
 static void need_multiple(int n, int m)
 {
 	if (n % m) {
@@ -115,6 +153,10 @@ int main(int argc, char **argv)
 		need_multiple(n, 64);
 		dim3 g(n / 64, n / 64);
 		ms = time_ms(args, [&] { mm_reg1d<64, 64, 8, 8><<<g, 64 * 64 / 8>>>(a, b, c, n); });
+	} else if (args.kernel == "reg2d") {
+		need_multiple(n, 128);
+		dim3 g(n / 128, n / 128);
+		ms = time_ms(args, [&] { mm_reg2d<128, 128, 8, 8, 8><<<g, 256>>>(a, b, c, n); });
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

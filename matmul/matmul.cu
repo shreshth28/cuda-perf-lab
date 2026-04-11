@@ -100,6 +100,46 @@ __global__ void __launch_bounds__((BM / TM) * (BN / TN)) mm_reg2d(const float *a
 			c[(tr * TM + m) * n + tc * TN + j] = acc[m * TN + j];
 }
 
+template <int BM, int BN, int BK, int TM, int TN>
+__global__ void __launch_bounds__((BM / TM) * (BN / TN)) mm_vec4(const float *a, const float *b, float *c, int n)
+{
+	__shared__ float as[BK * BM], bs[BK * BN];
+	int tc = threadIdx.x % (BN / TN);
+	int tr = threadIdx.x / (BN / TN);
+	a += blockIdx.y * BM * n;
+	b += blockIdx.x * BN;
+	c += blockIdx.y * BM * n + blockIdx.x * BN;
+	int ar = threadIdx.x / (BK / 4), ac = threadIdx.x % (BK / 4);
+	int br = threadIdx.x / (BN / 4), bc = threadIdx.x % (BN / 4);
+	float acc[TM * TN] = {0.f};
+	float ra[TM], rb[TN];
+	for (int t = 0; t < n; t += BK) {
+		float4 v = *reinterpret_cast<const float4 *>(&a[ar * n + ac * 4]);
+		as[(ac * 4 + 0) * BM + ar] = v.x;
+		as[(ac * 4 + 1) * BM + ar] = v.y;
+		as[(ac * 4 + 2) * BM + ar] = v.z;
+		as[(ac * 4 + 3) * BM + ar] = v.w;
+		*reinterpret_cast<float4 *>(&bs[br * BN + bc * 4]) = *reinterpret_cast<const float4 *>(&b[br * n + bc * 4]);
+		__syncthreads();
+		a += BK;
+		b += BK * n;
+		for (int k = 0; k < BK; k++) {
+			for (int m = 0; m < TM; m++)
+				ra[m] = as[k * BM + tr * TM + m];
+			for (int j = 0; j < TN; j++)
+				rb[j] = bs[k * BN + tc * TN + j];
+			for (int m = 0; m < TM; m++)
+				for (int j = 0; j < TN; j++)
+					acc[m * TN + j] += ra[m] * rb[j];
+		}
+		__syncthreads();
+	}
+	for (int m = 0; m < TM; m++)
+		for (int j = 0; j < TN; j += 4)
+			*reinterpret_cast<float4 *>(&c[(tr * TM + m) * n + tc * TN + j]) =
+				make_float4(acc[m * TN + j], acc[m * TN + j + 1], acc[m * TN + j + 2], acc[m * TN + j + 3]);
+}
+
 static void need_multiple(int n, int m)
 {
 	if (n % m) {
@@ -157,6 +197,10 @@ int main(int argc, char **argv)
 		need_multiple(n, 128);
 		dim3 g(n / 128, n / 128);
 		ms = time_ms(args, [&] { mm_reg2d<128, 128, 8, 8, 8><<<g, 256>>>(a, b, c, n); });
+	} else if (args.kernel == "vec4") {
+		need_multiple(n, 128);
+		dim3 g(n / 128, n / 128);
+		ms = time_ms(args, [&] { mm_vec4<128, 128, 8, 8, 8><<<g, 256>>>(a, b, c, n); });
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());
 		return 1;

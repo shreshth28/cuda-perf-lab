@@ -148,6 +148,12 @@ static void need_multiple(int n, int m)
 	}
 }
 
+static void cublas_mm(cublasHandle_t h, const float *a, const float *b, float *c, int n)
+{
+	float one = 1.f, zero = 0.f;
+	CKB(cublasSgemm(h, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, &one, b, n, a, n, &zero, c, n));
+}
+
 static void cpu_ref(const std::vector<float> &a, const std::vector<float> &b, std::vector<float> &c, int n)
 {
 	std::vector<double> acc(n);
@@ -180,8 +186,13 @@ int main(int argc, char **argv)
 	CK(cudaMemcpy(a, ha.data(), nn * sizeof(float), cudaMemcpyHostToDevice));
 	CK(cudaMemcpy(b, hb.data(), nn * sizeof(float), cudaMemcpyHostToDevice));
 
+	cublasHandle_t h;
+	CKB(cublasCreate(&h));
+
 	float ms;
-	if (args.kernel == "naive") {
+	if (args.kernel == "cublas") {
+		ms = time_ms(args, [&] { cublas_mm(h, a, b, c, n); });
+	} else if (args.kernel == "naive") {
 		dim3 bl(32, 32);
 		dim3 g((n + 31) / 32, (n + 31) / 32);
 		ms = time_ms(args, [&] { mm_naive<<<g, bl>>>(a, b, c, n); });
@@ -210,13 +221,22 @@ int main(int argc, char **argv)
 	if (args.check) {
 		CK(cudaMemcpy(hc.data(), c, nn * sizeof(float), cudaMemcpyDeviceToHost));
 		std::vector<float> want(nn);
-		cpu_ref(ha, hb, want, n);
+		if (n <= 1024 || args.kernel == "cublas") {
+			cpu_ref(ha, hb, want, n);
+		} else {
+			float *r;
+			CK(cudaMalloc(&r, nn * sizeof(float)));
+			cublas_mm(h, a, b, r, n);
+			CK(cudaMemcpy(want.data(), r, nn * sizeof(float), cudaMemcpyDeviceToHost));
+			cudaFree(r);
+		}
 		ok = close_enough(hc, want, 1e-3f);
 	}
 
 	double gflops = 2.0 * n * n * n / (ms * 1e6);
 	report(args, ms, "gflops", gflops, ok);
 
+	cublasDestroy(h);
 	cudaFree(a);
 	cudaFree(b);
 	cudaFree(c);

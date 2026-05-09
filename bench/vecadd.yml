@@ -1,0 +1,16 @@
+name: vecadd
+hosts: gpu
+source:
+  repo: https://github.com/shreshth28/cuda-perf-lab
+build: make bin/vecadd
+variants:
+  naive:  './bin/vecadd --kernel naive --n {{ n }}'
+  stride: './bin/vecadd --kernel stride --n {{ n }}'
+  vec4:   './bin/vecadd --kernel vec4 --n {{ n }}'
+  cublas: './bin/vecadd --kernel cublas --n {{ n }}'
+matrix:
+  n: [1048576, 16777216, 67108864]
+metrics:
+  gbps: 'gbps=([0-9.]+)'
+repeat: 5
+warmup: 1

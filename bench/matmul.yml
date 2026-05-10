@@ -1,0 +1,22 @@
+name: matmul
+hosts: gpu
+source:
+  repo: https://github.com/shreshth28/cuda-perf-lab
+env:
+  PATH: /usr/local/cuda/bin:$PATH
+build: make bin/matmul bin/matmul_cpu
+variants:
+  cpu_omp: './bin/matmul_cpu --kernel omp --n {{ n }} --iters 1 --warmup 0 --no-check'
+  naive:   './bin/matmul --kernel naive --n {{ n }}'
+  tiled:   './bin/matmul --kernel tiled --n {{ n }}'
+  reg1d:   './bin/matmul --kernel reg1d --n {{ n }}'
+  reg2d:   './bin/matmul --kernel reg2d --n {{ n }}'
+  vec4:    './bin/matmul --kernel vec4 --n {{ n }}'
+  cublas:  './bin/matmul --kernel cublas --n {{ n }}'
+matrix:
+  n: [512, 1024, 2048, 4096]
+metrics:
+  gflops: 'gflops=([0-9.]+)'
+repeat: 5
+warmup: 1
+timeout: 600

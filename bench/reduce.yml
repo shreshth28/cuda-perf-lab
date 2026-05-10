@@ -1,0 +1,19 @@
+name: reduce
+hosts: gpu
+source:
+  repo: https://github.com/shreshth28/cuda-perf-lab
+env:
+  PATH: /usr/local/cuda/bin:$PATH
+build: make bin/reduce
+variants:
+  atomic: './bin/reduce --kernel atomic --n {{ n }}'
+  tree:   './bin/reduce --kernel tree --n {{ n }}'
+  shfl:   './bin/reduce --kernel shfl --n {{ n }}'
+  multi:  './bin/reduce --kernel multi --n {{ n }}'
+  cublas: './bin/reduce --kernel cublas --n {{ n }}'
+matrix:
+  n: [1048576, 16777216, 67108864]
+metrics:
+  gbps: 'gbps=([0-9.]+)'
+repeat: 5
+warmup: 1

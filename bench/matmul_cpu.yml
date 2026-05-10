@@ -1,0 +1,16 @@
+name: matmul-cpu
+hosts: gpu
+source:
+  repo: https://github.com/shreshth28/cuda-perf-lab
+build: make bin/matmul_cpu
+variants:
+  naive: './bin/matmul_cpu --kernel naive --n {{ n }}'
+  ikj:   './bin/matmul_cpu --kernel ikj --n {{ n }}'
+  omp:   './bin/matmul_cpu --kernel omp --n {{ n }}'
+matrix:
+  n: [256, 512, 1024]
+metrics:
+  gflops: 'gflops=([0-9.]+)'
+repeat: 3
+warmup: 1
+timeout: 600

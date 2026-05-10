@@ -1,0 +1,18 @@
+name: transpose
+hosts: gpu
+source:
+  repo: https://github.com/shreshth28/cuda-perf-lab
+env:
+  PATH: /usr/local/cuda/bin:$PATH
+build: make bin/transpose
+variants:
+  naive:     './bin/transpose --kernel naive --n {{ n }}'
+  tiled:     './bin/transpose --kernel tiled --n {{ n }}'
+  tiled_pad: './bin/transpose --kernel tiled_pad --n {{ n }}'
+  cublas:    './bin/transpose --kernel cublas --n {{ n }}'
+matrix:
+  n: [1024, 2048, 4096, 8192]
+metrics:
+  gbps: 'gbps=([0-9.]+)'
+repeat: 5
+warmup: 1

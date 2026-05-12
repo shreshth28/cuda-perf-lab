@@ -12,6 +12,10 @@ variants:
   cublas:    './bin/transpose --kernel cublas --n {{ n }}'
 matrix:
   n: [1024, 2048, 4096, 8192]
+timing:
+  from: output
+  regex: 'time_ms=([0-9.]+)'
+  unit: ms
 metrics:
   gbps: 'gbps=([0-9.]+)'
 repeat: 5

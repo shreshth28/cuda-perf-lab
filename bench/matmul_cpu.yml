@@ -9,6 +9,10 @@ variants:
   omp:   './bin/matmul_cpu --kernel omp --n {{ n }}'
 matrix:
   n: [256, 512, 1024]
+timing:
+  from: output
+  regex: 'time_ms=([0-9.]+)'
+  unit: ms
 metrics:
   gflops: 'gflops=([0-9.]+)'
 repeat: 3

@@ -15,6 +15,10 @@ variants:
   cublas:  './bin/matmul --kernel cublas --n {{ n }}'
 matrix:
   n: [512, 1024, 2048, 4096]
+timing:
+  from: output
+  regex: 'time_ms=([0-9.]+)'
+  unit: ms
 metrics:
   gflops: 'gflops=([0-9.]+)'
 repeat: 5

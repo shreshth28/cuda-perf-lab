@@ -33,4 +33,12 @@ kernel=reg2d n=2048 time_ms=... gflops=... ok=1
 - vecadd/reduce/transpose report `gbps`, matmul reports `gflops`.
 - reg1d needs n to be a multiple of 64, reg2d and vec4 a multiple of 128.
 
-`./run_all.sh` runs everything at a few sizes.
+## Benchmarking
+
+`bench/` has a spec per program for [ansibench](https://github.com/shreshth28/ansibench), which builds everything on the GPU box over ssh, runs every kernel at a few sizes with repeats and warmups, and gives back a CSV and a summary table:
+
+```
+ansibench run bench/matmul.yml -i inventory.ini
+```
+
+The specs use `timing: from: output`, so the numbers are the `time_ms` each program prints and not the process wall time (which is mostly CUDA starting up). Point `hosts:` at your own machine, or pass `-l`.

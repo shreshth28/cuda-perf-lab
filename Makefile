@@ -4,10 +4,15 @@ ARCH ?= sm_86
 NVFLAGS = -O3 -std=c++17 -arch=$(ARCH) -Icommon
 LIBS = -lcublas
 CXXFLAGS = -O3 -march=native -std=c++17 -fopenmp -Icommon
+CLFLAGS = -O3 -std=c++17 -Icommon -Iopencl
+CLLIBS = -lOpenCL
 
 PROGS = bin/vecadd bin/reduce bin/transpose bin/matmul bin/matmul_cpu
+CL_PROGS = bin/cl_vecadd
 
 all: $(PROGS)
+
+opencl: $(CL_PROGS)
 
 bin:
 	mkdir -p bin
@@ -27,7 +32,10 @@ bin/matmul: matmul/matmul.cu common/common.h common/args.h | bin
 bin/matmul_cpu: matmul/matmul_cpu.cpp common/args.h | bin
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
+bin/cl_%: opencl/%.cpp opencl/cl_common.h common/args.h | bin
+	$(CXX) $(CLFLAGS) -o $@ $< $(CLLIBS)
+
 clean:
 	rm -rf bin
 
-.PHONY: all clean
+.PHONY: all opencl clean

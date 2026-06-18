@@ -106,19 +106,26 @@ template <class F>
 float cl_time_ms(Cl &cl, const Args &a, F launch)
 {
 	for (int i = 0; i < a.warmup; i++)
-		clReleaseEvent(launch());
+		for (cl_event e : launch())
+			clReleaseEvent(e);
 	CL(clFinish(cl.q));
 	double total = 0;
 	for (int i = 0; i < a.iters; i++) {
-		cl_event ev = launch();
-		CL(clWaitForEvents(1, &ev));
+		std::vector<cl_event> evs = launch();
+		CL(clWaitForEvents(evs.size(), evs.data()));
 		cl_ulong t0, t1;
-		CL(clGetEventProfilingInfo(ev, CL_PROFILING_COMMAND_START, sizeof(t0), &t0, nullptr));
-		CL(clGetEventProfilingInfo(ev, CL_PROFILING_COMMAND_END, sizeof(t1), &t1, nullptr));
+		CL(clGetEventProfilingInfo(evs.front(), CL_PROFILING_COMMAND_START, sizeof(t0), &t0, nullptr));
+		CL(clGetEventProfilingInfo(evs.back(), CL_PROFILING_COMMAND_END, sizeof(t1), &t1, nullptr));
 		total += (t1 - t0) * 1e-6;
-		clReleaseEvent(ev);
+		for (cl_event e : evs)
+			clReleaseEvent(e);
 	}
 	return total / a.iters;
+}
+
+inline void local_arg(cl_kernel k, cl_uint i, size_t bytes)
+{
+	cl_ok(clSetKernelArg(k, i, bytes, nullptr), "clSetKernelArg (local)");
 }
 
 inline cl_event launch1d(Cl &cl, cl_kernel k, size_t global, size_t local)

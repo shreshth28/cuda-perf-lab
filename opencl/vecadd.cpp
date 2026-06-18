@@ -42,13 +42,13 @@ int main(int argc, char **argv)
 	if (args.kernel == "naive") {
 		cl_kernel k = cl.kernel(prog, "add_naive");
 		set_args(k, a, b, c, (cl_long)n);
-		ms = cl_time_ms(cl, args, [&] { return launch1d(cl, k, round_up(n, ls), ls); });
+		ms = cl_time_ms(cl, args, [&] { return std::vector<cl_event>{launch1d(cl, k, round_up(n, ls), ls)}; });
 		clReleaseKernel(k);
 	} else if (args.kernel == "vec4") {
 		cl_kernel k = cl.kernel(prog, "add_vec4");
 		cl_long n4 = n / 4;
 		set_args(k, a, b, c, n4, a, b, c, (cl_long)n);
-		ms = cl_time_ms(cl, args, [&] { return launch1d(cl, k, round_up(n4 > 4 ? n4 : 4, ls), ls); });
+		ms = cl_time_ms(cl, args, [&] { return std::vector<cl_event>{launch1d(cl, k, round_up(n4 > 4 ? n4 : 4, ls), ls)}; });
 		clReleaseKernel(k);
 	} else {
 		fprintf(stderr, "unknown kernel %s\n", args.kernel.c_str());

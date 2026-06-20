@@ -60,7 +60,14 @@ struct Cl {
 		cl_int e;
 		cl_program p = clCreateProgramWithSource(ctx, 1, &src, nullptr, &e);
 		CL(e);
-		CL(clBuildProgram(p, 1, &dev, "-cl-fast-relaxed-math", nullptr, nullptr));
+		if (clBuildProgram(p, 1, &dev, "-cl-fast-relaxed-math", nullptr, nullptr) != CL_SUCCESS) {
+			size_t len;
+			clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, 0, nullptr, &len);
+			std::string log(len, '\0');
+			clGetProgramBuildInfo(p, dev, CL_PROGRAM_BUILD_LOG, len, &log[0], nullptr);
+			fprintf(stderr, "kernel build failed:\n%s\n", log.c_str());
+			exit(1);
+		}
 		return p;
 	}
 

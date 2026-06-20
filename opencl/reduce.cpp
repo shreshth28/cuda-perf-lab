@@ -16,6 +16,23 @@ __kernel void sum_tree(__global const float *x, __global float *part, long n, __
 		part[get_group_id(0)] = s[0];
 }
 
+__kernel void sum_multi(__global const float *x, __global float *part, long n, __local float *s)
+{
+	int l = get_local_id(0);
+	float v = 0.f;
+	for (long i = get_global_id(0); i < n; i += get_global_size(0))
+		v += x[i];
+	s[l] = v;
+	barrier(CLK_LOCAL_MEM_FENCE);
+	for (int k = get_local_size(0) / 2; k > 0; k >>= 1) {
+		if (l < k)
+			s[l] += s[l + k];
+		barrier(CLK_LOCAL_MEM_FENCE);
+	}
+	if (l == 0)
+		part[get_group_id(0)] = s[0];
+}
+
 __kernel void sum_final(__global const float *part, __global float *out, int m, __local float *s)
 {
 	int l = get_local_id(0);
@@ -64,6 +81,20 @@ int main(int argc, char **argv)
 		local_arg(fin, 3, ls * sizeof(float));
 		ms = cl_time_ms(cl, args, [&] {
 			return std::vector<cl_event>{launch1d(cl, k, round_up(n, ls), ls), launch1d(cl, fin, ls, ls)};
+		});
+		clReleaseKernel(k);
+	} else if (args.kernel == "multi") {
+		cl_uint cus;
+		CL(clGetDeviceInfo(cl.dev, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(cus), &cus, nullptr));
+		int groups = cus * 8;
+		part = cl.buf(groups * sizeof(float));
+		cl_kernel k = cl.kernel(prog, "sum_multi");
+		set_args(k, x, part, (cl_long)n);
+		local_arg(k, 3, ls * sizeof(float));
+		set_args(fin, part, out, (cl_int)groups);
+		local_arg(fin, 3, ls * sizeof(float));
+		ms = cl_time_ms(cl, args, [&] {
+			return std::vector<cl_event>{launch1d(cl, k, groups * ls, ls), launch1d(cl, fin, ls, ls)};
 		});
 		clReleaseKernel(k);
 	} else {

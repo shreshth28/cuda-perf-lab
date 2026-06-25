@@ -9,22 +9,26 @@ __kernel void tr_naive(__global const float *in, __global float *out, int n)
 		out[(long)x * n + y] = in[(long)y * n + x];
 }
 
-__kernel void tr_tiled(__global const float *in, __global float *out, int n)
-{
-	__local float t[32][32];
-	int tx = get_local_id(0), ty = get_local_id(1);
-	int x = get_group_id(0) * 32 + tx;
-	int y = get_group_id(1) * 32 + ty;
-	for (int j = 0; j < 32; j += 8)
-		if (x < n && y + j < n)
-			t[ty + j][tx] = in[(long)(y + j) * n + x];
-	barrier(CLK_LOCAL_MEM_FENCE);
-	x = get_group_id(1) * 32 + tx;
-	y = get_group_id(0) * 32 + ty;
-	for (int j = 0; j < 32; j += 8)
-		if (x < n && y + j < n)
-			out[(long)(y + j) * n + x] = t[tx][ty + j];
-}
+#define TILED(name, PAD)                                                              \
+	__kernel void name(__global const float *in, __global float *out, int n)       \
+	{                                                                              \
+		__local float t[32][32 + PAD];                                         \
+		int tx = get_local_id(0), ty = get_local_id(1);                        \
+		int x = get_group_id(0) * 32 + tx;                                     \
+		int y = get_group_id(1) * 32 + ty;                                     \
+		for (int j = 0; j < 32; j += 8)                                        \
+			if (x < n && y + j < n)                                        \
+				t[ty + j][tx] = in[(long)(y + j) * n + x];             \
+		barrier(CLK_LOCAL_MEM_FENCE);                                          \
+		x = get_group_id(1) * 32 + tx;                                         \
+		y = get_group_id(0) * 32 + ty;                                         \
+		for (int j = 0; j < 32; j += 8)                                        \
+			if (x < n && y + j < n)                                        \
+				out[(long)(y + j) * n + x] = t[tx][ty + j];            \
+	}
+
+TILED(tr_tiled, 0)
+TILED(tr_tiled_pad, 1)
 )";
 
 static size_t round_up(size_t x, size_t m) { return (x + m - 1) / m * m; }
@@ -44,8 +48,8 @@ int main(int argc, char **argv)
 	cl_mem out = cl.buf(nn * sizeof(float));
 
 	float ms;
-	if (args.kernel == "naive" || args.kernel == "tiled") {
-		cl_kernel k = cl.kernel(prog, args.kernel == "naive" ? "tr_naive" : "tr_tiled");
+	if (args.kernel == "naive" || args.kernel == "tiled" || args.kernel == "tiled_pad") {
+		cl_kernel k = cl.kernel(prog, ("tr_" + args.kernel).c_str());
 		set_args(k, in, out, (cl_int)n);
 		size_t gy = args.kernel == "naive" ? round_up(n, 8) : round_up(n, 32) / 4;
 		ms = cl_time_ms(cl, args, [&] { return std::vector<cl_event>{launch2d(cl, k, round_up(n, 32), gy, 32, 8)}; });

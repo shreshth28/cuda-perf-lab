@@ -8,7 +8,7 @@ CLFLAGS = -O3 -std=c++17 -Icommon -Iopencl
 CLLIBS = -lOpenCL
 
 PROGS = bin/vecadd bin/reduce bin/transpose bin/matmul bin/matmul_cpu
-CL_PROGS = bin/cl_vecadd bin/cl_reduce bin/cl_transpose
+CL_PROGS = bin/cl_vecadd bin/cl_reduce bin/cl_transpose bin/cl_matmul
 
 all: $(PROGS)
 

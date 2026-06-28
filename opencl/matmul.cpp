@@ -33,6 +33,51 @@ __kernel void mm_tiled(__global const float *a, __global const float *b, __globa
 	if (row < n && col < n)
 		c[row * n + col] = s;
 }
+
+#define BM 128
+#define BN 128
+#define BK 8
+#define TM 8
+#define TN 8
+__kernel void mm_reg2d(__global const float *a, __global const float *b, __global float *c, int n)
+{
+	__local float as[BM * BK], bs[BK * BN];
+	const int nt = (BM / TM) * (BN / TN);
+	int tid = get_local_id(0);
+	int tc = tid % (BN / TN);
+	int tr = tid / (BN / TN);
+	a += get_group_id(1) * BM * n;
+	b += get_group_id(0) * BN;
+	c += get_group_id(1) * BM * n + get_group_id(0) * BN;
+	int ar = tid / BK, ac = tid % BK, sa = nt / BK;
+	int br = tid / BN, bc = tid % BN, sb = nt / BN;
+	float acc[TM * TN];
+	for (int i = 0; i < TM * TN; i++)
+		acc[i] = 0.f;
+	float ra[TM], rb[TN];
+	for (int t = 0; t < n; t += BK) {
+		for (int o = 0; o < BM; o += sa)
+			as[(ar + o) * BK + ac] = a[(ar + o) * n + ac];
+		for (int o = 0; o < BK; o += sb)
+			bs[(br + o) * BN + bc] = b[(br + o) * n + bc];
+		barrier(CLK_LOCAL_MEM_FENCE);
+		a += BK;
+		b += BK * n;
+		for (int k = 0; k < BK; k++) {
+			for (int m = 0; m < TM; m++)
+				ra[m] = as[(tr * TM + m) * BK + k];
+			for (int j = 0; j < TN; j++)
+				rb[j] = bs[k * BN + tc * TN + j];
+			for (int m = 0; m < TM; m++)
+				for (int j = 0; j < TN; j++)
+					acc[m * TN + j] += ra[m] * rb[j];
+		}
+		barrier(CLK_LOCAL_MEM_FENCE);
+	}
+	for (int m = 0; m < TM; m++)
+		for (int j = 0; j < TN; j++)
+			c[(tr * TM + m) * n + tc * TN + j] = acc[m * TN + j];
+}
 )";
 
 static size_t round_up(size_t x, size_t m) { return (x + m - 1) / m * m; }
@@ -74,6 +119,17 @@ int main(int argc, char **argv)
 		set_args(k, a, b, c, (cl_int)n);
 		ms = cl_time_ms(cl, args, [&] {
 			return std::vector<cl_event>{launch2d(cl, k, round_up(n, 16), round_up(n, 16), 16, 16)};
+		});
+		clReleaseKernel(k);
+	} else if (args.kernel == "reg2d") {
+		if (n % 128) {
+			fprintf(stderr, "reg2d needs n to be a multiple of 128\n");
+			return 1;
+		}
+		cl_kernel k = cl.kernel(prog, "mm_reg2d");
+		set_args(k, a, b, c, (cl_int)n);
+		ms = cl_time_ms(cl, args, [&] {
+			return std::vector<cl_event>{launch2d(cl, k, (n / 128) * 256, n / 128, 256, 1)};
 		});
 		clReleaseKernel(k);
 	} else {

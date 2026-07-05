@@ -28,7 +28,25 @@ struct Cl {
 		std::vector<cl_platform_id> ps(np);
 		CL(clGetPlatformIDs(np, ps.data(), nullptr));
 		bool found = false;
+		if (const char *want = getenv("CL_DEVICE")) {
+			unsigned pi = 0, di = 0;
+			sscanf(want, "%u:%u", &pi, &di);
+			cl_uint nd = 0;
+			if (pi < np)
+				clGetDeviceIDs(ps[pi], CL_DEVICE_TYPE_ALL, 0, nullptr, &nd);
+			if (di >= nd) {
+				fprintf(stderr, "CL_DEVICE=%s doesn't exist\n", want);
+				exit(1);
+			}
+			std::vector<cl_device_id> ds(nd);
+			CL(clGetDeviceIDs(ps[pi], CL_DEVICE_TYPE_ALL, nd, ds.data(), nullptr));
+			plat = ps[pi];
+			dev = ds[di];
+			found = true;
+		}
 		for (cl_device_type type : {(cl_device_type)CL_DEVICE_TYPE_GPU, (cl_device_type)CL_DEVICE_TYPE_ALL}) {
+			if (found)
+				break;
 			for (auto p : ps) {
 				if (clGetDeviceIDs(p, type, 1, &dev, nullptr) == CL_SUCCESS) {
 					plat = p;
@@ -36,13 +54,14 @@ struct Cl {
 					break;
 				}
 			}
-			if (found)
-				break;
 		}
 		if (!found) {
 			fprintf(stderr, "no opencl device\n");
 			exit(1);
 		}
+		char name[256] = {0};
+		clGetDeviceInfo(dev, CL_DEVICE_NAME, sizeof(name) - 1, name, nullptr);
+		fprintf(stderr, "device: %s\n", name);
 		cl_int e;
 		ctx = clCreateContext(nullptr, 1, &dev, nullptr, nullptr, &e);
 		CL(e);

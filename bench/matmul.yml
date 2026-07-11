@@ -13,6 +13,9 @@ variants:
   reg2d:   './bin/matmul --kernel reg2d --n {{ n }}'
   vec4:    './bin/matmul --kernel vec4 --n {{ n }}'
   cublas:  './bin/matmul --kernel cublas --n {{ n }}'
+  cl_naive: {build: make bin/cl_matmul, run: './bin/cl_matmul --kernel naive --n {{ n }}'}
+  cl_tiled: {build: make bin/cl_matmul, run: './bin/cl_matmul --kernel tiled --n {{ n }}'}
+  cl_reg2d: {build: make bin/cl_matmul, run: './bin/cl_matmul --kernel reg2d --n {{ n }}'}
 matrix:
   n: [512, 1024, 2048, 4096]
 timing:

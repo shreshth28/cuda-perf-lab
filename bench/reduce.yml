@@ -11,6 +11,8 @@ variants:
   shfl:   './bin/reduce --kernel shfl --n {{ n }}'
   multi:  './bin/reduce --kernel multi --n {{ n }}'
   cublas: './bin/reduce --kernel cublas --n {{ n }}'
+  cl_tree:  {build: make bin/cl_reduce, run: './bin/cl_reduce --kernel tree --n {{ n }}'}
+  cl_multi: {build: make bin/cl_reduce, run: './bin/cl_reduce --kernel multi --n {{ n }}'}
 matrix:
   n: [1048576, 16777216, 67108864]
 timing:

@@ -10,6 +10,8 @@ variants:
   stride: './bin/vecadd --kernel stride --n {{ n }}'
   vec4:   './bin/vecadd --kernel vec4 --n {{ n }}'
   cublas: './bin/vecadd --kernel cublas --n {{ n }}'
+  cl_naive: {build: make bin/cl_vecadd, run: './bin/cl_vecadd --kernel naive --n {{ n }}'}
+  cl_vec4:  {build: make bin/cl_vecadd, run: './bin/cl_vecadd --kernel vec4 --n {{ n }}'}
 matrix:
   n: [1048576, 16777216, 67108864]
 timing:

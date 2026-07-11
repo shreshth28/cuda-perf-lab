@@ -10,6 +10,9 @@ variants:
   tiled:     './bin/transpose --kernel tiled --n {{ n }}'
   tiled_pad: './bin/transpose --kernel tiled_pad --n {{ n }}'
   cublas:    './bin/transpose --kernel cublas --n {{ n }}'
+  cl_naive:     {build: make bin/cl_transpose, run: './bin/cl_transpose --kernel naive --n {{ n }}'}
+  cl_tiled:     {build: make bin/cl_transpose, run: './bin/cl_transpose --kernel tiled --n {{ n }}'}
+  cl_tiled_pad: {build: make bin/cl_transpose, run: './bin/cl_transpose --kernel tiled_pad --n {{ n }}'}
 matrix:
   n: [1024, 2048, 4096, 8192]
 timing:
